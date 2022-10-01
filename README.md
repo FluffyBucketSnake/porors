@@ -20,7 +20,7 @@ Also, *pomodoro* is Italian for tomato. Just letting you know :)
 
 - [x] Track **work** and **break** sessions;
 - [x] Show notifications on each session end;
-- [ ] Long **break** sessions;
+- [x] Long **break** sessions;
 - [ ] Pausing the timer;
 - [ ] Command line configuration for session duration, timer display and notification texts.
 

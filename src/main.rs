@@ -70,13 +70,15 @@ impl PomodoroApplication {
 struct PomodoroConfig {
     work_session_duration: Duration,
     break_session_duration: Duration,
+    long_break_session_duration: Duration,
 }
 
 impl Default for PomodoroConfig {
     fn default() -> Self {
         Self {
             work_session_duration: Duration::from_secs(1 * 60),
-            break_session_duration: Duration::from_secs(30),
+            break_session_duration: Duration::from_secs(10),
+            long_break_session_duration: Duration::from_secs(30),
         }
     }
 }
@@ -86,6 +88,7 @@ impl PomodoroConfig {
         match session_kind {
             SessionKind::Work => self.work_session_duration,
             SessionKind::Break => self.break_session_duration,
+            SessionKind::LongBreak => self.long_break_session_duration,
         }
     }
 }
@@ -96,14 +99,17 @@ const ONE_SECOND: Duration = Duration::from_secs(1);
 enum SessionKind {
     Work,
     Break,
+    LongBreak,
 }
 
 impl SessionKind {
     fn for_index(index: usize) -> Self {
-        if index % 2 == 1 {
-            Self::Work
-        } else {
+        if index % 8 == 0 {
+            Self::LongBreak
+        } else if index % 2 == 0 {
             Self::Break
+        } else {
+            Self::Work
         }
     }
 }
@@ -144,6 +150,7 @@ impl Display for PomodoroSession {
         let kind_text = match self.kind {
             SessionKind::Work => "Work",
             SessionKind::Break => "Break",
+            SessionKind::LongBreak => "Long break",
         };
         let time_till_end = self.remaining_time();
         let timer_minutes = time_till_end.as_secs() / 60;
