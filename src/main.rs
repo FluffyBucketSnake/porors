@@ -4,6 +4,7 @@ use crossterm::{
     style::Print,
     terminal::{Clear, ClearType},
 };
+use notify_rust::Notification;
 use std::{fmt::Display, io::stdout, thread, time::Duration};
 
 fn main() {
@@ -24,6 +25,11 @@ fn main() {
             thread::sleep(delta_time);
             current_session.tick(delta_time);
         }
+        Notification::new()
+            .summary("Pomodoro session over")
+            .icon("clock")
+            .show()
+            .unwrap();
         current_session = current_session.next();
     }
 }
