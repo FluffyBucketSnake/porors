@@ -1,30 +1,51 @@
-# pomodoro-rs
+# ~ :tomato: pomodoro-rs :tomato: ~
 
-A quick CLI implementation of a pomodoro timer.
+A quick and simple CLI implementation of a *Pomodoro* timer.
 
-#
+## What the heck is a Pomodoro?
 
-The Pomodoro Technique is a time management method developed by Francesco Cirillo in the late 1980s. The technique uses a timer to break down work into intervals, traditionally 25 minutes in length, separated by short breaks - 5 minutes.
+The *Pomodoro* technique is a time management method, developed by *Francesco Cirillo*, supposed to increase productivity. It accomplishes such by splitting work into sessions - which alternate between long **work** and small **break** sessions.
 
-## User Stories
+Also, *pomodoro* is Italian for tomato. Just letting you know :)
 
-- [ ] User can see a timer for 25 minutes - the **working** session
-- [ ] After the **working** session is over, the User can see a timer for 5 minutes - the **break** session
-- [ ] User can _start_ / _pause_, _stop_ and _reset_ the timers
+## So, why does this project exist
 
-## Bonus features
+1. I wanted a simple CLI app for tracking *Pomodoro* sessions. Just a single timer. No daemon/service. Keep it simple, stupid.
 
-- [ ] User can hear a sound playing when the timer hits `00:00` - denoting that the session has ended
-- [ ] User can change / customize the minutes in both sessions before starting
-- [ ] User can set a **long break** session of 10 minutes. This will be activated every 4th **break** session
+2. Practice with the *Rust* programming language, specially *asynchronous Rust*.
 
-## Useful links and resources
+3. Fun. Coding is fun. 'nuff said.
 
-- More about the [Pomodoro Technique](https://en.m.wikipedia.org/wiki/Pomodoro_Technique)
+## Roadmap
 
-## Example projects
+- [x] Track **work** and **break** sessions;
+- [x] Show notifications on each session end;
+- [ ] Long **break** sessions;
+- [ ] Pausing the timer;
+- [ ] Command line configuration for session duration, timer display and notification texts.
 
-- [Joe Weaver's example](https://codepen.io/JoeWeaver/pen/bLbbxK)
-- [FreeCodeCamp Pomodoro Clock example](https://codepen.io/freeCodeCamp/full/XpKrrW)
-- [A desktop pomodoro app for menubar/tray.](https://github.com/amitmerchant1990/pomolectron)
-- [Sheri Richardson's example](https://srd-pomodoro-timer.netlify.com/)
+### Possible extra features
+
+- [ ] File configuration alternative;
+- [ ] Custom alarm sound.
+
+## Dependencies
+
+This project currently uses the following crates:
+
+- *crossterm 0.25.0*
+- *notify-rust 4.5.10*
+
+If you are on Linux, you'll probably need **D-Bus** and a **notification server**. Both normally come with pretty much all *DEs*, such as *GNOME* and *KDE*. However, if you are on a minimalist distro, you might need to install both. As a recommendation for a notification server, I'll mention [Dunst](https://github.com/dunst-project/dunst).
+
+## Building
+
+Just use `cargo run`
+
+## Running
+
+As of now, there are no command line options. So:
+
+```bash
+pomodoro-rs
+```
