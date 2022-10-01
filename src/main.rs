@@ -1,16 +1,29 @@
-use std::{fmt::Display, thread, time::Duration};
+use crossterm::{
+    cursor::{RestorePosition, SavePosition},
+    execute,
+    style::Print,
+    terminal::{Clear, ClearType},
+};
+use std::{fmt::Display, io::stdout, thread, time::Duration};
 
 fn main() {
     let config = PomodoroConfig::default();
     let mut current_session = PomodoroSession::first(&config);
 
+    execute!(stdout(), SavePosition).unwrap();
     loop {
         while !current_session.is_finished() {
-            println!("{}", current_session);
-            let delta_time = current_session.tick();
+            execute!(
+                stdout(),
+                RestorePosition,
+                Clear(ClearType::FromCursorDown),
+                Print(&current_session)
+            )
+            .unwrap();
+            let delta_time = ONE_SECOND;
             thread::sleep(delta_time);
+            current_session.tick(delta_time);
         }
-        println!("SESSION END!");
         current_session = current_session.next();
     }
 }
@@ -23,8 +36,8 @@ struct PomodoroConfig {
 impl Default for PomodoroConfig {
     fn default() -> Self {
         Self {
-            work_session_duration: Duration::from_secs(5),
-            break_session_duration: Duration::from_secs(5),
+            work_session_duration: Duration::from_secs(1 * 60),
+            break_session_duration: Duration::from_secs(30),
         }
     }
 }
@@ -80,9 +93,8 @@ impl<'a> PomodoroSession<'a> {
         self.elapsed_time > self.duration()
     }
 
-    fn tick(&mut self) -> Duration {
-        self.elapsed_time += ONE_SECOND;
-        ONE_SECOND
+    fn tick(&mut self, delta_time: Duration) {
+        self.elapsed_time += delta_time;
     }
 
     fn next(&self) -> Self {
