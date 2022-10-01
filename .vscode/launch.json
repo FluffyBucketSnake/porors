@@ -7,15 +7,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'pomodoro-rs'",
+            "name": "Debug executable 'porors'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=pomodoro-rs",
-                    "--package=pomodoro-rs"
+                    "--bin=porors",
+                    "--package=porors"
                 ],
                 "filter": {
-                    "name": "pomodoro-rs",
+                    "name": "porors",
                     "kind": "bin"
                 }
             },
@@ -25,13 +25,13 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'pomodoro-rs'",
+            "name": "Debug unit tests in executable 'porors'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=pomodoro-rs",
-                    "--package=pomodoro-rs"
+                    "--bin=porors",
+                    "--package=porors"
                 ],
                 "filter": {
                     "name": "pomodoro-rs",

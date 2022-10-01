@@ -1,6 +1,6 @@
-# ~ :tomato: pomodoro-rs :tomato: ~
+# ~ :tomato: porors :tomato: ~
 
-A quick and simple CLI implementation of a *Pomodoro* timer.
+`porors`. A quick and simple CLI implementation of a *Pomodoro* timer.
 
 ## What the heck is a Pomodoro?
 
