@@ -1,3 +1,4 @@
+use async_std::task;
 use crossterm::{
     cursor::RestorePosition,
     execute,
@@ -5,12 +6,12 @@ use crossterm::{
     terminal::{Clear, ClearType},
 };
 use notify_rust::Notification;
-use std::{fmt::Display, io::stdout, thread, time::Duration};
+use std::{fmt::Display, io::stdout, time::Duration};
 
 fn main() {
     let config = PomodoroConfig::default();
     let app = PomodoroApplication::new(config);
-    app.run();
+    task::block_on(app.run());
 }
 
 struct PomodoroApplication {
@@ -27,11 +28,11 @@ impl PomodoroApplication {
         }
     }
 
-    fn run(mut self) {
+    async fn run(mut self) {
         loop {
             let delta_time = ONE_SECOND;
+            task::sleep(delta_time).await;
             self.tick(delta_time);
-            thread::sleep(delta_time);
         }
     }
 
