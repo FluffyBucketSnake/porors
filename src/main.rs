@@ -1,7 +1,7 @@
 use async_std::task;
 use crossterm::{
     cursor::RestorePosition,
-    event::{Event, EventStream, KeyCode},
+    event::{Event, EventStream, KeyCode, KeyEvent, KeyModifiers},
     execute,
     style::Print,
     terminal::{self, Clear, ClearType},
@@ -50,6 +50,7 @@ impl PomodoroApplication {
         loop {
             let event = self.fetch_event().await;
             let elapsed_time = previous_timestamp.elapsed();
+            previous_timestamp = Instant::now();
             match event {
                 PomodoroEvent::Quit => break,
                 PomodoroEvent::TogglePause => {
@@ -58,12 +59,13 @@ impl PomodoroApplication {
                     }
                     self.paused = !self.paused;
                 }
-                PomodoroEvent::Tick => {
+                PomodoroEvent::Tick if !self.paused => {
                     self.tick(elapsed_time);
                 }
+                _ => {}
             }
-            previous_timestamp = Instant::now();
         }
+        execute!(stdout(), RestorePosition).unwrap();
         terminal::disable_raw_mode().unwrap();
     }
 
@@ -82,14 +84,12 @@ impl PomodoroApplication {
             () = timer => PomodoroEvent::Tick,
             event = terminal_event => {
                 match event {
-                    Some(Ok(event)) => {
-                        if event == Event::Key(KeyCode::Char('p').into()) {
-                            PomodoroEvent::TogglePause
-                        }
-                        else {
-                            PomodoroEvent::Tick
-                        }
-                    },
+                    Some(Ok(event))
+                        if event == Event::Key(KeyCode::Char('p').into()) => PomodoroEvent::TogglePause,
+                    Some(Ok(event))
+                        if event == Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL))
+                        || event == Event::Key(KeyCode::Char('q').into()) => PomodoroEvent::Quit,
+                    Some(Ok(_)) => PomodoroEvent::Tick,
                     Some(Err(e)) => panic!("{}", e),
                     None => PomodoroEvent::Quit
                 }
