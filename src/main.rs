@@ -1,12 +1,18 @@
 use async_std::task;
 use crossterm::{
     cursor::RestorePosition,
+    event::{Event, EventStream, KeyCode},
     execute,
     style::Print,
-    terminal::{Clear, ClearType},
+    terminal::{self, Clear, ClearType},
 };
+use futures::{pin_mut, select, FutureExt, StreamExt};
 use notify_rust::Notification;
-use std::{fmt::Display, io::stdout, time::Duration};
+use std::{
+    fmt::Display,
+    io::stdout,
+    time::{Duration, Instant},
+};
 
 fn main() {
     let config = PomodoroConfig::default();
@@ -14,9 +20,17 @@ fn main() {
     task::block_on(app.run());
 }
 
+enum PomodoroEvent {
+    Tick,
+    TogglePause,
+    Quit,
+}
+
 struct PomodoroApplication {
     config: PomodoroConfig,
+    paused: bool,
     current_session: PomodoroSession,
+    terminal_stream_pool: EventStream,
 }
 
 impl PomodoroApplication {
@@ -24,16 +38,63 @@ impl PomodoroApplication {
         let initial_session = PomodoroSession::for_index(1, &config);
         Self {
             config,
+            paused: false,
             current_session: initial_session,
+            terminal_stream_pool: EventStream::new(),
         }
     }
 
     async fn run(mut self) {
+        terminal::enable_raw_mode().unwrap();
+        let mut previous_timestamp = Instant::now();
         loop {
-            let delta_time = ONE_SECOND;
-            task::sleep(delta_time).await;
-            self.tick(delta_time);
+            let event = self.fetch_event().await;
+            let elapsed_time = previous_timestamp.elapsed();
+            match event {
+                PomodoroEvent::Quit => break,
+                PomodoroEvent::TogglePause => {
+                    if !self.paused {
+                        self.tick(elapsed_time);
+                    }
+                    self.paused = !self.paused;
+                }
+                PomodoroEvent::Tick => {
+                    self.tick(elapsed_time);
+                }
+            }
+            previous_timestamp = Instant::now();
         }
+        terminal::disable_raw_mode().unwrap();
+    }
+
+    async fn fetch_event(&mut self) -> PomodoroEvent {
+        let timer = if self.paused {
+            async_std::future::pending().boxed()
+        } else {
+            task::sleep(ONE_SECOND).boxed()
+        }
+        .fuse();
+        let terminal_event = self.terminal_stream_pool.next().fuse();
+
+        pin_mut!(timer, terminal_event);
+
+        select!(
+            () = timer => PomodoroEvent::Tick,
+            event = terminal_event => {
+                match event {
+                    Some(Ok(event)) => {
+                        if event == Event::Key(KeyCode::Char('p').into()) {
+                            PomodoroEvent::TogglePause
+                        }
+                        else {
+                            PomodoroEvent::Tick
+                        }
+                    },
+                    Some(Err(e)) => panic!("{}", e),
+                    None => PomodoroEvent::Quit
+                }
+            }
+        )
     }
 
     fn tick(&mut self, delta: Duration) {
