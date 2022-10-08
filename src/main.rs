@@ -9,7 +9,6 @@ use crossterm::{
 use futures::{pin_mut, select, FutureExt, StreamExt};
 use notify_rust::Notification;
 use std::{
-    fmt::Display,
     io::stdout,
     time::{Duration, Instant},
 };
@@ -54,10 +53,12 @@ impl PomodoroApplication {
             match event {
                 PomodoroEvent::Quit => break,
                 PomodoroEvent::TogglePause => {
-                    if !self.paused {
-                        self.tick(elapsed_time);
-                    }
                     self.paused = !self.paused;
+                    self.tick(if self.paused {
+                        elapsed_time
+                    } else {
+                        Duration::ZERO
+                    });
                 }
                 PomodoroEvent::Tick if !self.paused => {
                     self.tick(elapsed_time);
@@ -65,7 +66,7 @@ impl PomodoroApplication {
                 _ => {}
             }
         }
-        execute!(stdout(), RestorePosition).unwrap();
+        execute!(stdout(), RestorePosition, Clear(ClearType::FromCursorDown)).unwrap();
         terminal::disable_raw_mode().unwrap();
     }
 
@@ -73,7 +74,7 @@ impl PomodoroApplication {
         let timer = if self.paused {
             async_std::future::pending().boxed()
         } else {
-            task::sleep(ONE_SECOND).boxed()
+            task::sleep(Duration::from_millis(500)).boxed()
         }
         .fuse();
         let terminal_event = self.terminal_stream_pool.next().fuse();
@@ -98,7 +99,7 @@ impl PomodoroApplication {
     }
 
     fn tick(&mut self, delta: Duration) {
-        self.display_session();
+        self.update_display();
         self.current_session.tick(delta);
         if self.current_session.is_finished() {
             self.show_session_end_notification();
@@ -106,12 +107,15 @@ impl PomodoroApplication {
         }
     }
 
-    fn display_session(&self) {
+    fn update_display(&self) {
+        let display_text = self
+            .config
+            .render_display_text(&self.current_session, self.paused);
         execute!(
             stdout(),
             RestorePosition,
             Clear(ClearType::FromCursorDown),
-            Print(&self.current_session)
+            Print(display_text)
         )
         .unwrap();
     }
@@ -130,6 +134,9 @@ impl PomodoroApplication {
 }
 
 struct PomodoroConfig {
+    work_session_label: String,
+    break_session_label: String,
+    long_break_session_label: String,
     work_session_duration: Duration,
     break_session_duration: Duration,
     long_break_session_duration: Duration,
@@ -138,6 +145,9 @@ struct PomodoroConfig {
 impl Default for PomodoroConfig {
     fn default() -> Self {
         Self {
+            work_session_label: "Work".into(),
+            break_session_label: "Break".into(),
+            long_break_session_label: "Long break".into(),
             work_session_duration: Duration::from_secs(1 * 60),
             break_session_duration: Duration::from_secs(10),
             long_break_session_duration: Duration::from_secs(30),
@@ -153,9 +163,34 @@ impl PomodoroConfig {
             SessionKind::LongBreak => self.long_break_session_duration,
         }
     }
-}
 
-const ONE_SECOND: Duration = Duration::from_secs(1);
+    fn render_display_text(&self, current_session: &PomodoroSession, is_paused: bool) -> String {
+        let session_kind = self.session_label_for(current_session.kind);
+        let session_number = current_session.index;
+        let timer = self.format_timer(current_session.remaining_time());
+        if is_paused {
+            format!("{session_kind}\n\rSession {session_number}\n\r{timer}\n\r(Paused)")
+        } else {
+            format!("{session_kind}\n\rSession {session_number}\n\r{timer}")
+        }
+    }
+
+    fn session_label_for(&self, session_kind: SessionKind) -> &str {
+        match session_kind {
+            SessionKind::Work => &self.work_session_label,
+            SessionKind::Break => &self.break_session_label,
+            SessionKind::LongBreak => &self.long_break_session_label,
+        }
+    }
+
+    fn format_timer(&self, timer_duration: Duration) -> String {
+        let hours = timer_duration.as_secs() / 3600;
+        let minutes = (timer_duration.as_secs() / 60) % 60;
+        let seconds = timer_duration.as_secs() % 60;
+        let milli = timer_duration.as_millis() % 1000;
+        format!("{hours:02}:{minutes:02}:{seconds:02}.{milli:03}")
+    }
+}
 
 #[derive(Clone, Copy)]
 enum SessionKind {
@@ -204,23 +239,5 @@ impl PomodoroSession {
 
     fn tick(&mut self, delta_time: Duration) {
         self.elapsed_time += delta_time;
-    }
-}
-
-impl Display for PomodoroSession {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let kind_text = match self.kind {
-            SessionKind::Work => "Work",
-            SessionKind::Break => "Break",
-            SessionKind::LongBreak => "Long break",
-        };
-        let time_till_end = self.remaining_time();
-        let timer_minutes = time_till_end.as_secs() / 60;
-        let timer_seconds = time_till_end.as_secs() % 60;
-        write!(
-            f,
-            "Session {}: ({}); Timer: {:02}:{:02}",
-            self.index, kind_text, timer_minutes, timer_seconds
-        )
     }
 }
