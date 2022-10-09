@@ -47,6 +47,7 @@ impl PomodoroApplication {
         terminal::enable_raw_mode().unwrap();
         let mut previous_timestamp = Instant::now();
         loop {
+            self.update_display();
             let event = self.fetch_event().await;
             let elapsed_time = previous_timestamp.elapsed();
             previous_timestamp = Instant::now();
@@ -74,7 +75,7 @@ impl PomodoroApplication {
         let timer = if self.paused {
             async_std::future::pending().boxed()
         } else {
-            task::sleep(Duration::from_millis(500)).boxed()
+            task::sleep(Duration::from_millis(1000)).boxed()
         }
         .fuse();
         let terminal_event = self.terminal_stream_pool.next().fuse();
@@ -99,7 +100,6 @@ impl PomodoroApplication {
     }
 
     fn tick(&mut self, delta: Duration) {
-        self.update_display();
         self.current_session.tick(delta);
         if self.current_session.is_finished() {
             self.show_session_end_notification();
