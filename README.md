@@ -21,11 +21,13 @@ Also, *pomodoro* is Italian for tomato. Just letting you know :)
 - [x] Track **work** and **break** sessions;
 - [x] Show notifications on each session end;
 - [x] Long **break** sessions;
-- [ ] Pausing the timer;
-- [ ] Command line configuration for session duration, timer display and notification texts.
+- [x] Pausing the timer;
+- [ ] Command line configuration for session duration, timer display and notification texts;
+- [ ] Handle system signals correctly (SIGINT|SIGQUIT|SIGTERM -> Quit; SIGUSR1 -> Pause/Resume).
 
 ### Possible extra features
 
+- [ ] Resetting the timer;
 - [ ] File configuration alternative;
 - [ ] Custom alarm sound.
 
