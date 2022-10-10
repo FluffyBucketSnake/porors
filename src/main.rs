@@ -1,4 +1,7 @@
-use async_std::task;
+use async_std::{
+    stream::{Stream, StreamExt},
+    task,
+};
 use backtrace::Backtrace;
 use crossterm::{
     cursor::RestorePosition,
@@ -7,13 +10,8 @@ use crossterm::{
     style::Print,
     terminal::{self, Clear, ClearType},
 };
-use futures::{pin_mut, select, FutureExt, StreamExt};
 use notify_rust::Notification;
-use std::{
-    io::stdout,
-    panic,
-    time::{Duration, Instant},
-};
+use std::{io::stdout, panic, pin::Pin, time::Duration};
 
 fn main() {
     let config = PomodoroConfig::default();
@@ -21,46 +19,34 @@ fn main() {
     task::block_on(app.run());
 }
 
-enum PomodoroEvent {
-    Tick,
-    TogglePause,
-    Quit,
-}
-
 struct PomodoroApplication {
     config: PomodoroConfig,
     paused: bool,
+    event_stream: PomodoroEventStream,
     current_session: PomodoroSession,
-    terminal_stream_pool: EventStream,
 }
 
 impl PomodoroApplication {
     fn new(config: PomodoroConfig) -> Self {
         let initial_session = PomodoroSession::for_index(1, &config);
+        let tick_interval = config.tick_interval;
         Self {
             config,
             paused: false,
             current_session: initial_session,
-            terminal_stream_pool: EventStream::new(),
+            event_stream: PomodoroEventStream::new(tick_interval),
         }
     }
 
     async fn run(mut self) {
         self.init();
-        let mut previous_timestamp = Instant::now();
-        loop {
-            self.update_display();
-            let event = self.fetch_event().await;
-            let elapsed_time = previous_timestamp.elapsed();
-            previous_timestamp = Instant::now();
+        while let Some(event) = self.event_stream.next().await {
             match event {
                 PomodoroEvent::Quit => break,
                 PomodoroEvent::TogglePause => self.toggle_pause(),
-                PomodoroEvent::Tick if !self.paused => {
-                    self.tick(elapsed_time);
-                }
-                _ => {}
+                PomodoroEvent::Tick => self.tick(),
             }
+            self.update_display();
         }
         self.shutdown();
     }
@@ -73,6 +59,7 @@ impl PomodoroApplication {
             let backtrace = Backtrace::new();
             println!("{}\n{:?}", info, backtrace);
         }));
+        self.update_display();
     }
 
     fn update_display(&self) {
@@ -88,40 +75,15 @@ impl PomodoroApplication {
         .unwrap();
     }
 
-    async fn fetch_event(&mut self) -> PomodoroEvent {
-        let timer = if self.paused {
-            async_std::future::pending().boxed()
-        } else {
-            task::sleep(Duration::from_millis(1000)).boxed()
-        }
-        .fuse();
-        let terminal_event = self.terminal_stream_pool.next().fuse();
-
-        pin_mut!(timer, terminal_event);
-
-        select!(
-            () = timer => PomodoroEvent::Tick,
-            event = terminal_event => {
-                match event {
-                    Some(Ok(event))
-                        if event == Event::Key(KeyCode::Char('p').into()) => PomodoroEvent::TogglePause,
-                    Some(Ok(event))
-                        if event == Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL))
-                        || event == Event::Key(KeyCode::Char('q').into()) => PomodoroEvent::Quit,
-                    Some(Ok(_)) => PomodoroEvent::Tick,
-                    Some(Err(e)) => panic!("{}", e),
-                    None => PomodoroEvent::Quit
-                }
-            }
-        )
-    }
-
     fn toggle_pause(&mut self) {
         self.paused = !self.paused;
     }
 
-    fn tick(&mut self, delta: Duration) {
-        self.current_session.tick(delta);
+    fn tick(&mut self) {
+        if self.paused {
+            return;
+        }
+        self.current_session.tick(self.config.tick_interval);
         if self.current_session.is_finished() {
             self.show_session_end_notification();
             self.current_session = self.next_session();
@@ -150,6 +112,7 @@ struct PomodoroConfig {
     work_session_label: String,
     break_session_label: String,
     long_break_session_label: String,
+    tick_interval: Duration,
     work_session_duration: Duration,
     break_session_duration: Duration,
     long_break_session_duration: Duration,
@@ -161,6 +124,7 @@ impl Default for PomodoroConfig {
             work_session_label: "Work".into(),
             break_session_label: "Break".into(),
             long_break_session_label: "Long break".into(),
+            tick_interval: Duration::from_secs(1),
             work_session_duration: Duration::from_secs(1 * 60),
             break_session_duration: Duration::from_secs(10),
             long_break_session_duration: Duration::from_secs(30),
@@ -182,9 +146,9 @@ impl PomodoroConfig {
         let session_number = current_session.index;
         let timer = self.format_timer(current_session.remaining_time());
         if is_paused {
-            format!("{session_kind}\n\rSession {session_number}\n\r{timer}\n\r(Paused)")
+            format!("{session_kind}\n\rSession {session_number}\n\r{timer}\n\r(Paused)\n\r")
         } else {
-            format!("{session_kind}\n\rSession {session_number}\n\r{timer}")
+            format!("{session_kind}\n\rSession {session_number}\n\r{timer}\n\r")
         }
     }
 
@@ -202,6 +166,51 @@ impl PomodoroConfig {
         let seconds = timer_duration.as_secs() % 60;
         let milli = timer_duration.as_millis() % 1000;
         format!("{hours:02}:{minutes:02}:{seconds:02}.{milli:03}")
+    }
+}
+
+enum PomodoroEvent {
+    Tick,
+    TogglePause,
+    Quit,
+}
+
+struct PomodoroEventStream {
+    underlying_stream: Pin<Box<dyn Stream<Item = PomodoroEvent>>>,
+}
+
+impl PomodoroEventStream {
+    fn new(tick_interval: Duration) -> Self {
+        let interval_stream =
+            async_std::stream::interval(tick_interval).map(|_| PomodoroEvent::Tick);
+        let terminal_event = EventStream::new().filter_map(|event| match event {
+            Ok(event) if event == Event::Key(KeyCode::Char('p').into()) => {
+                Some(PomodoroEvent::TogglePause)
+            }
+            Ok(event)
+                if event
+                    == Event::Key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL))
+                    || event == Event::Key(KeyCode::Char('q').into()) =>
+            {
+                Some(PomodoroEvent::Quit)
+            }
+            Ok(_) => None,
+            Err(e) => panic!("{}", e),
+        });
+        Self {
+            underlying_stream: Box::pin(interval_stream.merge(terminal_event)),
+        }
+    }
+}
+
+impl Stream for PomodoroEventStream {
+    type Item = PomodoroEvent;
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut task::Context<'_>,
+    ) -> task::Poll<Option<Self::Item>> {
+        let underlying_stream = self.underlying_stream.as_mut();
+        underlying_stream.poll_next(cx)
     }
 }
 

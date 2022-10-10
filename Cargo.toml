@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 backtrace = "0.3.66"
-futures = "0.3.24"
 notify-rust = "4.5.10"
 
 [dependencies.crossterm]
@@ -16,3 +15,4 @@ features = ["event-stream"]
 
 [dependencies.async-std]
 version = "1.12.0"
+features = ["unstable"]
