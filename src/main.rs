@@ -1,4 +1,5 @@
 use async_std::task;
+use backtrace::Backtrace;
 use crossterm::{
     cursor::RestorePosition,
     event::{Event, EventStream, KeyCode, KeyEvent, KeyModifiers},
@@ -10,6 +11,7 @@ use futures::{pin_mut, select, FutureExt, StreamExt};
 use notify_rust::Notification;
 use std::{
     io::stdout,
+    panic,
     time::{Duration, Instant},
 };
 
@@ -65,6 +67,12 @@ impl PomodoroApplication {
 
     fn init(&mut self) {
         terminal::enable_raw_mode().unwrap();
+        panic::set_hook(Box::new(|info| {
+            execute!(stdout(), RestorePosition, Clear(ClearType::FromCursorDown)).unwrap();
+            terminal::disable_raw_mode().unwrap();
+            let backtrace = Backtrace::new();
+            println!("{}\n{:?}", info, backtrace);
+        }));
     }
 
     fn update_display(&self) {

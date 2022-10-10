@@ -6,8 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-notify-rust = "4.5.10"
+backtrace = "0.3.66"
 futures = "0.3.24"
+notify-rust = "4.5.10"
 
 [dependencies.crossterm]
 version = "0.25.0"
