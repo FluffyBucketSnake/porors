@@ -59,6 +59,7 @@ impl PomodoroApplication {
             let backtrace = Backtrace::new();
             println!("{}\n{:?}", info, backtrace);
         }));
+        self.show_session_start_notification();
         self.update_display();
     }
 
@@ -85,21 +86,21 @@ impl PomodoroApplication {
         }
         self.current_session.tick(self.config.tick_interval);
         if self.current_session.is_finished() {
-            self.show_session_end_notification();
-            self.current_session = self.next_session();
+            self.go_to_next_session();
         }
     }
 
-    fn show_session_end_notification(&self) {
-        Notification::new()
-            .summary("Pomodoro session over")
-            .icon("clock")
+    fn show_session_start_notification(&self) {
+        self.config
+            .notification_for(self.current_session.kind)
             .show()
             .unwrap();
     }
 
-    fn next_session(&self) -> PomodoroSession {
-        PomodoroSession::for_index(self.current_session.index + 1, &self.config)
+    fn go_to_next_session(&mut self) {
+        self.current_session =
+            PomodoroSession::for_index(self.current_session.index + 1, &self.config);
+        self.show_session_start_notification();
     }
 
     fn shutdown(&mut self) {
@@ -109,6 +110,15 @@ impl PomodoroApplication {
 }
 
 struct PomodoroConfig {
+    work_session_notification_icon: String,
+    work_session_notification_title: String,
+    work_session_notification_body: String,
+    break_session_notification_icon: String,
+    break_session_notification_title: String,
+    break_session_notification_body: String,
+    long_break_session_notification_icon: String,
+    long_break_session_notification_title: String,
+    long_break_session_notification_body: String,
     work_session_label: String,
     break_session_label: String,
     long_break_session_label: String,
@@ -121,6 +131,15 @@ struct PomodoroConfig {
 impl Default for PomodoroConfig {
     fn default() -> Self {
         Self {
+            work_session_notification_icon: "clock".into(),
+            work_session_notification_title: "Working time".into(),
+            work_session_notification_body: "Well, the moment has passed, back to work!".into(),
+            break_session_notification_icon: "clock".into(),
+            break_session_notification_title: "Break time".into(),
+            break_session_notification_body: "Drink some water!".into(),
+            long_break_session_notification_icon: "clock".into(),
+            long_break_session_notification_title: "Long break time".into(),
+            long_break_session_notification_body: "Go for a walk or eat a snack!".into(),
             work_session_label: "Work".into(),
             break_session_label: "Break".into(),
             long_break_session_label: "Long break".into(),
@@ -166,6 +185,29 @@ impl PomodoroConfig {
         let seconds = timer_duration.as_secs() % 60;
         let milli = timer_duration.as_millis() % 1000;
         format!("{hours:02}:{minutes:02}:{seconds:02}.{milli:03}")
+    }
+
+    fn notification_for(&self, session_kind: SessionKind) -> Notification {
+        let (icon, title, body) = match session_kind {
+            SessionKind::Work => (
+                &self.work_session_notification_icon,
+                &self.work_session_notification_title,
+                &self.work_session_notification_body,
+            ),
+            SessionKind::Break => (
+                &self.break_session_notification_icon,
+                &self.break_session_notification_title,
+                &self.break_session_notification_body,
+            ),
+            SessionKind::LongBreak => (
+                &self.long_break_session_notification_icon,
+                &self.long_break_session_notification_title,
+                &self.long_break_session_notification_body,
+            ),
+        };
+        let mut notification = Notification::new();
+        notification.icon(icon).summary(title).body(body);
+        notification
     }
 }
 
