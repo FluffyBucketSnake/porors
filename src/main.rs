@@ -44,7 +44,7 @@ impl PomodoroApplication {
     }
 
     async fn run(mut self) {
-        terminal::enable_raw_mode().unwrap();
+        self.init();
         let mut previous_timestamp = Instant::now();
         loop {
             self.update_display();
@@ -53,22 +53,31 @@ impl PomodoroApplication {
             previous_timestamp = Instant::now();
             match event {
                 PomodoroEvent::Quit => break,
-                PomodoroEvent::TogglePause => {
-                    self.paused = !self.paused;
-                    self.tick(if self.paused {
-                        elapsed_time
-                    } else {
-                        Duration::ZERO
-                    });
-                }
+                PomodoroEvent::TogglePause => self.toggle_pause(),
                 PomodoroEvent::Tick if !self.paused => {
                     self.tick(elapsed_time);
                 }
                 _ => {}
             }
         }
-        execute!(stdout(), RestorePosition, Clear(ClearType::FromCursorDown)).unwrap();
-        terminal::disable_raw_mode().unwrap();
+        self.shutdown();
+    }
+
+    fn init(&mut self) {
+        terminal::enable_raw_mode().unwrap();
+    }
+
+    fn update_display(&self) {
+        let display_text = self
+            .config
+            .render_display_text(&self.current_session, self.paused);
+        execute!(
+            stdout(),
+            RestorePosition,
+            Clear(ClearType::FromCursorDown),
+            Print(display_text)
+        )
+        .unwrap();
     }
 
     async fn fetch_event(&mut self) -> PomodoroEvent {
@@ -99,25 +108,16 @@ impl PomodoroApplication {
         )
     }
 
+    fn toggle_pause(&mut self) {
+        self.paused = !self.paused;
+    }
+
     fn tick(&mut self, delta: Duration) {
         self.current_session.tick(delta);
         if self.current_session.is_finished() {
             self.show_session_end_notification();
             self.current_session = self.next_session();
         }
-    }
-
-    fn update_display(&self) {
-        let display_text = self
-            .config
-            .render_display_text(&self.current_session, self.paused);
-        execute!(
-            stdout(),
-            RestorePosition,
-            Clear(ClearType::FromCursorDown),
-            Print(display_text)
-        )
-        .unwrap();
     }
 
     fn show_session_end_notification(&self) {
@@ -130,6 +130,11 @@ impl PomodoroApplication {
 
     fn next_session(&self) -> PomodoroSession {
         PomodoroSession::for_index(self.current_session.index + 1, &self.config)
+    }
+
+    fn shutdown(&mut self) {
+        execute!(stdout(), RestorePosition, Clear(ClearType::FromCursorDown)).unwrap();
+        terminal::disable_raw_mode().unwrap();
     }
 }
 
