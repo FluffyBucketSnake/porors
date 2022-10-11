@@ -66,7 +66,8 @@ impl PomodoroApplication {
     fn update_display(&self) {
         let display_text = self
             .config
-            .render_display_text(&self.current_session, self.paused);
+            .formatter
+            .format_session(&self.current_session, self.paused);
         execute!(
             stdout(),
             RestorePosition,
@@ -92,9 +93,8 @@ impl PomodoroApplication {
 
     fn show_session_start_notification(&self) {
         self.config
-            .notification_for(self.current_session.kind)
-            .show()
-            .unwrap();
+            .notifier
+            .notify_session_start(&self.current_session);
     }
 
     fn go_to_next_session(&mut self) {
@@ -110,61 +110,73 @@ impl PomodoroApplication {
 }
 
 struct PomodoroConfig {
-    work_session_notification_icon: String,
-    work_session_notification_title: String,
-    work_session_notification_body: String,
-    break_session_notification_icon: String,
-    break_session_notification_title: String,
-    break_session_notification_body: String,
-    long_break_session_notification_icon: String,
-    long_break_session_notification_title: String,
-    long_break_session_notification_body: String,
-    work_session_label: String,
-    break_session_label: String,
-    long_break_session_label: String,
     tick_interval: Duration,
-    work_session_duration: Duration,
-    break_session_duration: Duration,
-    long_break_session_duration: Duration,
+    durations: PomodoroDurations,
+    formatter: PomodoroDisplayFormatter,
+    notifier: PomodoroNotifier,
 }
 
 impl Default for PomodoroConfig {
     fn default() -> Self {
         Self {
-            work_session_notification_icon: "clock".into(),
-            work_session_notification_title: "Working time".into(),
-            work_session_notification_body: "Well, the moment has passed, back to work!".into(),
-            break_session_notification_icon: "clock".into(),
-            break_session_notification_title: "Break time".into(),
-            break_session_notification_body: "Drink some water!".into(),
-            long_break_session_notification_icon: "clock".into(),
-            long_break_session_notification_title: "Long break time".into(),
-            long_break_session_notification_body: "Go for a walk or eat a snack!".into(),
-            work_session_label: "Work".into(),
-            break_session_label: "Break".into(),
-            long_break_session_label: "Long break".into(),
             tick_interval: Duration::from_secs(1),
-            work_session_duration: Duration::from_secs(1 * 60),
-            break_session_duration: Duration::from_secs(10),
-            long_break_session_duration: Duration::from_secs(30),
+            durations: PomodoroDurations {
+                work_session: Duration::from_secs(1 * 60),
+                break_session: Duration::from_secs(10),
+                long_break_session: Duration::from_secs(30),
+            },
+            notifier: PomodoroNotifier {
+                work_session_notification: (
+                    "clock",
+                    "Working time",
+                    "Well, the moment has passed, back to work!",
+                )
+                    .into(),
+                break_session_notification: ("clock", "Break time", "Drink some water!").into(),
+                long_break_session_notification: (
+                    "clock",
+                    "Long break time",
+                    "Go for a walk or eat a snack!",
+                )
+                    .into(),
+            },
+            formatter: PomodoroDisplayFormatter {
+                work_session_label: "Work".into(),
+                break_session_label: "Break".into(),
+                long_break_session_label: "Long break".into(),
+            },
         }
     }
 }
 
-impl PomodoroConfig {
-    fn session_duration_for(&self, session_kind: SessionKind) -> Duration {
-        match session_kind {
-            SessionKind::Work => self.work_session_duration,
-            SessionKind::Break => self.break_session_duration,
-            SessionKind::LongBreak => self.long_break_session_duration,
+struct PomodoroDurations {
+    work_session: Duration,
+    break_session: Duration,
+    long_break_session: Duration,
+}
+
+impl PomodoroDurations {
+    fn for_session(&self, kind: SessionKind) -> Duration {
+        match kind {
+            SessionKind::Work => self.work_session,
+            SessionKind::Break => self.break_session,
+            SessionKind::LongBreak => self.long_break_session,
         }
     }
+}
 
-    fn render_display_text(&self, current_session: &PomodoroSession, is_paused: bool) -> String {
-        let session_kind = self.session_label_for(current_session.kind);
-        let session_number = current_session.index;
-        let timer = self.format_timer(current_session.remaining_time());
-        if is_paused {
+struct PomodoroDisplayFormatter {
+    work_session_label: String,
+    break_session_label: String,
+    long_break_session_label: String,
+}
+
+impl PomodoroDisplayFormatter {
+    fn format_session(&self, session: &PomodoroSession, paused: bool) -> String {
+        let session_kind = self.session_label_for(session.kind);
+        let session_number = session.index;
+        let timer = self.format_timer(session.remaining_time());
+        if paused {
             format!("{session_kind}\n\rSession {session_number}\n\r{timer}\n\r(Paused)\n\r")
         } else {
             format!("{session_kind}\n\rSession {session_number}\n\r{timer}\n\r")
@@ -186,28 +198,50 @@ impl PomodoroConfig {
         let milli = timer_duration.as_millis() % 1000;
         format!("{hours:02}:{minutes:02}:{seconds:02}.{milli:03}")
     }
+}
 
-    fn notification_for(&self, session_kind: SessionKind) -> Notification {
-        let (icon, title, body) = match session_kind {
-            SessionKind::Work => (
-                &self.work_session_notification_icon,
-                &self.work_session_notification_title,
-                &self.work_session_notification_body,
-            ),
-            SessionKind::Break => (
-                &self.break_session_notification_icon,
-                &self.break_session_notification_title,
-                &self.break_session_notification_body,
-            ),
-            SessionKind::LongBreak => (
-                &self.long_break_session_notification_icon,
-                &self.long_break_session_notification_title,
-                &self.long_break_session_notification_body,
-            ),
-        };
+struct PomodoroNotifier {
+    work_session_notification: PomodoroNotificationTemplate,
+    break_session_notification: PomodoroNotificationTemplate,
+    long_break_session_notification: PomodoroNotificationTemplate,
+}
+
+impl PomodoroNotifier {
+    fn notify_session_start(&self, session: &PomodoroSession) {
+        let notification = match session.kind {
+            SessionKind::Work => &self.work_session_notification,
+            SessionKind::Break => &self.break_session_notification,
+            SessionKind::LongBreak => &self.long_break_session_notification,
+        }
+        .build();
+        notification.show().unwrap();
+    }
+}
+
+struct PomodoroNotificationTemplate {
+    icon: String,
+    title: String,
+    body: String,
+}
+
+impl PomodoroNotificationTemplate {
+    fn build(&self) -> Notification {
         let mut notification = Notification::new();
-        notification.icon(icon).summary(title).body(body);
         notification
+            .icon(&self.icon)
+            .summary(&self.title)
+            .body(&self.body);
+        notification
+    }
+}
+
+impl From<(&str, &str, &str)> for PomodoroNotificationTemplate {
+    fn from((icon, title, body): (&str, &str, &str)) -> Self {
+        Self {
+            icon: icon.into(),
+            title: title.into(),
+            body: body.into(),
+        }
     }
 }
 
@@ -288,7 +322,7 @@ impl PomodoroSession {
         Self {
             index,
             kind,
-            duration: config.session_duration_for(kind),
+            duration: config.durations.for_session(kind),
             elapsed_time: Duration::ZERO,
         }
     }
