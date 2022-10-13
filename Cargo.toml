@@ -12,7 +12,7 @@ notify-rust = "4.5.10"
 
 [dependencies.clap]
 version = "4.0.13"
-features = ["cargo"]
+features = ["cargo", "derive"]
 
 [dependencies.crossterm]
 version = "0.25.0"

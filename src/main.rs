@@ -3,7 +3,7 @@ use async_std::{
     task,
 };
 use backtrace::Backtrace;
-use clap::{command, Arg};
+use clap::Parser;
 use crossterm::{
     cursor::RestorePosition,
     event::{Event, EventStream, KeyCode, KeyEvent, KeyModifiers},
@@ -12,7 +12,7 @@ use crossterm::{
     terminal::{self, Clear, ClearType},
 };
 use notify_rust::Notification;
-use std::{io::stdout, panic, pin::Pin, str::FromStr, time::Duration};
+use std::{io::stdout, panic, pin::Pin, time::Duration};
 
 fn main() {
     let config = task::block_on(PomodoroConfig::load());
@@ -119,127 +119,46 @@ struct PomodoroConfig {
 
 impl PomodoroConfig {
     async fn load() -> Self {
-        let args = command!()
-            .arg(
-                Arg::new("tick-interval")
-                    .short('t')
-                    .required(false)
-                    .value_parser(humantime::parse_duration),
-            )
-            .arg(
-                Arg::new("work-duration")
-                    .short('w')
-                    .required(false)
-                    .value_parser(humantime::parse_duration),
-            )
-            .arg(
-                Arg::new("break-duration")
-                    .short('b')
-                    .required(false)
-                    .value_parser(humantime::parse_duration),
-            )
-            .arg(
-                Arg::new("long-break-duration")
-                    .short('l')
-                    .required(false)
-                    .value_parser(humantime::parse_duration),
-            )
-            .arg(Arg::new("work-notification-icon").required(false))
-            .arg(Arg::new("work-notification-title").required(false))
-            .arg(Arg::new("work-notification-body").required(false))
-            .arg(Arg::new("break-notification-icon").required(false))
-            .arg(Arg::new("break-notification-title").required(false))
-            .arg(Arg::new("break-notification-body").required(false))
-            .arg(Arg::new("long-break-notification-icon").required(false))
-            .arg(Arg::new("long-break-notification-title").required(false))
-            .arg(Arg::new("long-break-notification-body").required(false))
-            .arg(Arg::new("work-label").required(false))
-            .arg(Arg::new("break-label").required(false))
-            .arg(Arg::new("long-break-label").required(false))
-            .get_matches();
+        let args = PomodoroArgs::parse();
 
         Self {
-            tick_interval: args
-                .try_get_one::<Duration>("tick-interval")
-                .unwrap()
-                .map_or(Duration::from_secs(1), Duration::to_owned),
+            tick_interval: args.tick_interval.unwrap_or(Duration::from_secs(1)),
             durations: PomodoroDurations {
-                work_session: args
-                    .try_get_one::<Duration>("work-duration")
-                    .unwrap()
-                    .map_or(Duration::from_secs(25 * 60), Duration::to_owned),
-                break_session: args
-                    .try_get_one::<Duration>("break-duration")
-                    .unwrap()
-                    .map_or(Duration::from_secs(5 * 60), Duration::to_owned),
+                work_session: args.work_duration.unwrap_or(Duration::from_secs(25 * 60)),
+                break_session: args.break_duration.unwrap_or(Duration::from_secs(5 * 60)),
                 long_break_session: args
-                    .try_get_one::<Duration>("long-break-duration")
-                    .unwrap()
-                    .map_or(Duration::from_secs(10 * 60), Duration::to_owned),
+                    .long_break_duration
+                    .unwrap_or(Duration::from_secs(10 * 60)),
             },
             notifier: PomodoroNotifier {
                 work_session_notification: (
-                    *args
-                        .try_get_one::<&str>("work-notification-icon")
-                        .unwrap()
-                        .unwrap_or(&"clock"),
-                    *args
-                        .try_get_one::<&str>("work-notification-title")
-                        .unwrap()
-                        .unwrap_or(&"Working time"),
-                    *args
-                        .try_get_one::<&str>("work-notification-body")
-                        .unwrap()
-                        .unwrap_or(&"Well, the moment has passed, back to work!"),
+                    args.work_notification_icon.unwrap_or("clock".into()),
+                    args.work_notification_title
+                        .unwrap_or("Working time".into()),
+                    args.work_notification_body
+                        .unwrap_or("Well, the moment has passed, back to work!".into()),
                 )
                     .into(),
                 break_session_notification: (
-                    *args
-                        .try_get_one::<&str>("break-notification-icon")
-                        .unwrap()
-                        .unwrap_or(&"clock"),
-                    *args
-                        .try_get_one::<&str>("break-notification-title")
-                        .unwrap()
-                        .unwrap_or(&"Break time"),
-                    *args
-                        .try_get_one::<&str>("break-notification-body")
-                        .unwrap()
-                        .unwrap_or(&"Drink some water!"),
+                    args.break_notification_icon.unwrap_or("clock".into()),
+                    args.break_notification_title.unwrap_or("Break time".into()),
+                    args.break_notification_body
+                        .unwrap_or("Drink some water!".into()),
                 )
                     .into(),
                 long_break_session_notification: (
-                    *args
-                        .try_get_one::<&str>("long-break-notification-icon")
-                        .unwrap()
-                        .unwrap_or(&"clock"),
-                    *args
-                        .try_get_one::<&str>("long-break-notification-title")
-                        .unwrap()
-                        .unwrap_or(&"Long break time"),
-                    *args
-                        .try_get_one::<&str>("long-break-notification-body")
-                        .unwrap()
-                        .unwrap_or(&"Go for a walk or eat a snack!"),
+                    args.long_break_notification_icon.unwrap_or("clock".into()),
+                    args.long_break_notification_title
+                        .unwrap_or("Long break time".into()),
+                    args.long_break_notification_body
+                        .unwrap_or("Go for a walk or eat a snack!".into()),
                 )
                     .into(),
             },
             formatter: PomodoroDisplayFormatter {
-                work_session_label: (*args
-                    .try_get_one::<&str>("work-label")
-                    .unwrap()
-                    .unwrap_or(&"Work"))
-                .into(),
-                break_session_label: (*args
-                    .try_get_one::<&str>("break-label")
-                    .unwrap()
-                    .unwrap_or(&"Break"))
-                .into(),
-                long_break_session_label: (*args
-                    .try_get_one::<&str>("long-break-label")
-                    .unwrap()
-                    .unwrap_or(&"Long break"))
-                .into(),
+                work_session_label: args.work_label.unwrap_or("Work".into()),
+                break_session_label: args.break_label.unwrap_or("Break".into()),
+                long_break_session_label: args.long_break_label.unwrap_or("Long break".into()),
             },
         }
     }
@@ -331,14 +250,67 @@ impl PomodoroNotificationTemplate {
     }
 }
 
-impl From<(&str, &str, &str)> for PomodoroNotificationTemplate {
-    fn from((icon, title, body): (&str, &str, &str)) -> Self {
+impl<T: Into<String>, U: Into<String>, V: Into<String>> From<(T, U, V)>
+    for PomodoroNotificationTemplate
+{
+    fn from((icon, title, body): (T, U, V)) -> Self {
         Self {
             icon: icon.into(),
             title: title.into(),
             body: body.into(),
         }
     }
+}
+
+#[derive(Parser)]
+struct PomodoroArgs {
+    #[arg(short = 't', long, value_parser = humantime::parse_duration, value_name = "DURATION")]
+    tick_interval: Option<Duration>,
+
+    #[arg(short = 'w', long, value_parser = humantime::parse_duration, value_name = "DURATION")]
+    work_duration: Option<Duration>,
+
+    #[arg(short = 'b', long, value_parser = humantime::parse_duration, value_name = "DURATION")]
+    break_duration: Option<Duration>,
+
+    #[arg(short = 'l', long, value_parser = humantime::parse_duration, value_name = "DURATION")]
+    long_break_duration: Option<Duration>,
+
+    #[arg(long, value_name = "ICON")]
+    work_notification_icon: Option<String>,
+
+    #[arg(long, value_name = "TEXT")]
+    work_notification_title: Option<String>,
+
+    #[arg(long, value_name = "TEXT")]
+    work_notification_body: Option<String>,
+
+    #[arg(long, value_name = "ICON")]
+    break_notification_icon: Option<String>,
+
+    #[arg(long, value_name = "TEXT")]
+    break_notification_title: Option<String>,
+
+    #[arg(long, value_name = "TEXT")]
+    break_notification_body: Option<String>,
+
+    #[arg(long, value_name = "ICON")]
+    long_break_notification_icon: Option<String>,
+
+    #[arg(long, value_name = "TEXT")]
+    long_break_notification_title: Option<String>,
+
+    #[arg(long, value_name = "TEXT")]
+    long_break_notification_body: Option<String>,
+
+    #[arg(long, value_name = "TEXT")]
+    work_label: Option<String>,
+
+    #[arg(long, value_name = "TEXT")]
+    break_label: Option<String>,
+
+    #[arg(long, value_name = "TEXT")]
+    long_break_label: Option<String>,
 }
 
 enum PomodoroEvent {
