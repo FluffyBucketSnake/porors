@@ -17,10 +17,11 @@ use notify_rust::Notification;
 use serde::Serialize;
 use std::{collections::HashMap, io::stdout, panic, pin::Pin, time::Duration};
 
-fn main() {
-    let config = task::block_on(PomodoroConfig::load());
-    let app = PomodoroApplication::new(config);
-    task::block_on(app.run());
+fn main() -> anyhow::Result<()> {
+    let config = task::block_on(PomodoroConfig::load())?;
+    let app = PomodoroApplication::new(config)?;
+    task::block_on(app.run())?;
+    Ok(())
 }
 
 struct PomodoroApplication {
@@ -31,43 +32,45 @@ struct PomodoroApplication {
 }
 
 impl PomodoroApplication {
-    fn new(config: PomodoroConfig) -> Self {
+    fn new(config: PomodoroConfig) -> anyhow::Result<Self> {
         let initial_session = PomodoroSession::for_index(1, &config);
         let tick_interval = config.tick_interval;
-        Self {
+        Ok(Self {
             config,
             paused: false,
             current_session: initial_session,
-            event_stream: PomodoroEventStream::new(tick_interval),
-        }
+            event_stream: PomodoroEventStream::new(tick_interval)?,
+        })
     }
 
-    async fn run(mut self) {
-        self.init();
+    async fn run(mut self) -> anyhow::Result<()> {
+        self.init()?;
         while let Some(event) = self.event_stream.next().await {
             match event {
                 PomodoroEvent::Quit => break,
                 PomodoroEvent::TogglePause => self.toggle_pause(),
-                PomodoroEvent::Tick => self.tick(),
+                PomodoroEvent::Tick => self.tick()?,
             }
-            self.update_display();
+            self.update_display()?;
         }
-        self.shutdown();
+        self.shutdown()?;
+        Ok(())
     }
 
-    fn init(&mut self) {
-        terminal::enable_raw_mode().unwrap();
+    fn init(&mut self) -> anyhow::Result<()> {
+        terminal::enable_raw_mode()?;
         panic::set_hook(Box::new(|info| {
             execute!(stdout(), RestorePosition, Clear(ClearType::FromCursorDown)).unwrap();
             terminal::disable_raw_mode().unwrap();
             let backtrace = Backtrace::new();
             println!("{}\n{:?}", info, backtrace);
         }));
-        self.show_session_start_notification();
-        self.update_display();
+        self.show_session_start_notification()?;
+        self.update_display()?;
+        Ok(())
     }
 
-    fn update_display(&self) {
+    fn update_display(&self) -> anyhow::Result<()> {
         let display_text = self
             .config
             .formatter
@@ -77,39 +80,43 @@ impl PomodoroApplication {
             RestorePosition,
             Clear(ClearType::FromCursorDown),
             Print(display_text)
-        )
-        .unwrap();
+        )?;
+        Ok(())
     }
 
     fn toggle_pause(&mut self) {
         self.paused = !self.paused;
     }
 
-    fn tick(&mut self) {
+    fn tick(&mut self) -> anyhow::Result<()> {
         if self.paused {
-            return;
+            return Ok(());
         }
         self.current_session.tick(self.config.tick_interval);
         if self.current_session.is_finished() {
-            self.go_to_next_session();
+            self.go_to_next_session()?;
         }
+        Ok(())
     }
 
-    fn show_session_start_notification(&self) {
+    fn show_session_start_notification(&self) -> anyhow::Result<()> {
         self.config
             .notifier
-            .notify_session_start(&self.current_session);
+            .notify_session_start(&self.current_session)?;
+        Ok(())
     }
 
-    fn go_to_next_session(&mut self) {
+    fn go_to_next_session(&mut self) -> anyhow::Result<()> {
         self.current_session =
             PomodoroSession::for_index(self.current_session.index + 1, &self.config);
-        self.show_session_start_notification();
+        self.show_session_start_notification()?;
+        Ok(())
     }
 
-    fn shutdown(&mut self) {
-        execute!(stdout(), RestorePosition, Clear(ClearType::FromCursorDown)).unwrap();
-        terminal::disable_raw_mode().unwrap();
+    fn shutdown(&mut self) -> anyhow::Result<()> {
+        execute!(stdout(), RestorePosition, Clear(ClearType::FromCursorDown))?;
+        terminal::disable_raw_mode()?;
+        Ok(())
     }
 }
 
@@ -121,10 +128,10 @@ struct PomodoroConfig {
 }
 
 impl PomodoroConfig {
-    async fn load() -> Self {
+    async fn load() -> anyhow::Result<Self> {
         let args = PomodoroArgs::parse();
 
-        Self {
+        Ok(Self {
             tick_interval: args.tick_interval.unwrap_or(Duration::from_secs(1)),
             durations: PomodoroDurations {
                 work_session: args.work_duration.unwrap_or(Duration::from_secs(25 * 60)),
@@ -172,7 +179,7 @@ impl PomodoroConfig {
                 break_session_label: args.break_label.unwrap_or("Break".into()),
                 long_break_session_label: args.long_break_label.unwrap_or("Long break".into()),
             },
-        }
+        })
     }
 }
 
@@ -248,14 +255,15 @@ struct PomodoroNotifier {
 }
 
 impl PomodoroNotifier {
-    fn notify_session_start(&self, session: &PomodoroSession) {
+    fn notify_session_start(&self, session: &PomodoroSession) -> anyhow::Result<()> {
         let notification = match session.kind {
             SessionKind::Work => &self.work_session_notification,
             SessionKind::Break => &self.break_session_notification,
             SessionKind::LongBreak => &self.long_break_session_notification,
         }
         .build();
-        notification.show().unwrap();
+        notification.show()?;
+        Ok(())
     }
 }
 
@@ -375,14 +383,13 @@ struct PomodoroEventStream {
 }
 
 impl PomodoroEventStream {
-    fn new(tick_interval: Duration) -> Self {
+    fn new(tick_interval: Duration) -> anyhow::Result<Self> {
         let signal_stream = Signals::new(vec![
             libc::SIGINT,
             libc::SIGQUIT,
             libc::SIGTERM,
             libc::SIGUSR1,
-        ])
-        .unwrap()
+        ])?
         .map(|event| match event {
             libc::SIGINT | libc::SIGQUIT | libc::SIGTERM => PomodoroEvent::Quit,
             libc::SIGUSR1 => PomodoroEvent::TogglePause,
@@ -404,9 +411,9 @@ impl PomodoroEventStream {
             Ok(_) => None,
             Err(e) => panic!("{}", e),
         });
-        Self {
+        Ok(Self {
             underlying_stream: Box::pin(interval_stream.merge(terminal_event).merge(signal_stream)),
-        }
+        })
     }
 }
 
