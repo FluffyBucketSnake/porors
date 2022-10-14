@@ -47,6 +47,7 @@ impl PomodoroApplication {
         self.init()?;
         while let Some(event) = self.event_stream.next().await {
             match event {
+                PomodoroEvent::Error(err) => return Err(err),
                 PomodoroEvent::Quit => break,
                 PomodoroEvent::TogglePause => self.toggle_pause(),
                 PomodoroEvent::Tick => self.tick()?,
@@ -373,6 +374,7 @@ struct PomodoroArgs {
 }
 
 enum PomodoroEvent {
+    Error(anyhow::Error),
     Tick,
     TogglePause,
     Quit,
@@ -409,7 +411,7 @@ impl PomodoroEventStream {
                 Some(PomodoroEvent::Quit)
             }
             Ok(_) => None,
-            Err(e) => panic!("{}", e),
+            Err(err) => Some(PomodoroEvent::Error(err.into())),
         });
         Ok(Self {
             underlying_stream: Box::pin(interval_stream.merge(terminal_event).merge(signal_stream)),
