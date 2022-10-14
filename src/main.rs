@@ -1,3 +1,4 @@
+use async_signals::Signals;
 use async_std::{
     stream::{Stream, StreamExt},
     task,
@@ -375,6 +376,18 @@ struct PomodoroEventStream {
 
 impl PomodoroEventStream {
     fn new(tick_interval: Duration) -> Self {
+        let signal_stream = Signals::new(vec![
+            libc::SIGINT,
+            libc::SIGQUIT,
+            libc::SIGTERM,
+            libc::SIGUSR1,
+        ])
+        .unwrap()
+        .map(|event| match event {
+            libc::SIGINT | libc::SIGQUIT | libc::SIGTERM => PomodoroEvent::Quit,
+            libc::SIGUSR1 => PomodoroEvent::TogglePause,
+            _ => unreachable!(),
+        });
         let interval_stream =
             async_std::stream::interval(tick_interval).map(|_| PomodoroEvent::Tick);
         let terminal_event = EventStream::new().filter_map(|event| match event {
@@ -392,7 +405,7 @@ impl PomodoroEventStream {
             Err(e) => panic!("{}", e),
         });
         Self {
-            underlying_stream: Box::pin(interval_stream.merge(terminal_event)),
+            underlying_stream: Box::pin(interval_stream.merge(terminal_event).merge(signal_stream)),
         }
     }
 }

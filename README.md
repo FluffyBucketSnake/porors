@@ -23,7 +23,7 @@ Also, *pomodoro* is Italian for tomato. Just letting you know :)
 - [x] Long **break** sessions;
 - [x] Pausing the timer;
 - [x] Command line configuration for session duration, timer display and notification texts;
-- [ ] Handle system signals correctly (SIGINT|SIGQUIT|SIGTERM -> Quit; SIGUSR1 -> Pause/Resume);
+- [x] Handle system signals correctly (SIGINT|SIGQUIT|SIGTERM -> Quit; SIGUSR1 -> Pause/Resume);
 - [ ] Use `anyhow` for better error handling.
 
 ### Possible extra features
