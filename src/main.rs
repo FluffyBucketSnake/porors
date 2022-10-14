@@ -11,8 +11,10 @@ use crossterm::{
     style::Print,
     terminal::{self, Clear, ClearType},
 };
+use dynfmt::Format;
 use notify_rust::Notification;
-use std::{io::stdout, panic, pin::Pin, time::Duration};
+use serde::Serialize;
+use std::{collections::HashMap, io::stdout, panic, pin::Pin, time::Duration};
 
 fn main() {
     let config = task::block_on(PomodoroConfig::load());
@@ -156,6 +158,9 @@ impl PomodoroConfig {
                     .into(),
             },
             formatter: PomodoroDisplayFormatter {
+                active_display: "{session_kind}\n\rSession {session_number}\n\r{timer}\n\r".into(),
+                paused_display:
+                    "{session_kind}\n\rSession {session_number}\n\r{timer}\n\r(Paused)\n\r".into(),
                 work_session_label: args.work_label.unwrap_or("Work".into()),
                 break_session_label: args.break_label.unwrap_or("Break".into()),
                 long_break_session_label: args.long_break_label.unwrap_or("Long break".into()),
@@ -181,6 +186,8 @@ impl PomodoroDurations {
 }
 
 struct PomodoroDisplayFormatter {
+    active_display: String,
+    paused_display: String,
     work_session_label: String,
     break_session_label: String,
     long_break_session_label: String,
@@ -188,13 +195,24 @@ struct PomodoroDisplayFormatter {
 
 impl PomodoroDisplayFormatter {
     fn format_session(&self, session: &PomodoroSession, paused: bool) -> String {
-        let session_kind = self.session_label_for(session.kind);
-        let session_number = session.index;
-        let timer = self.format_timer(session.remaining_time());
+        let session_kind = FormatItem::Str(self.session_label_for(session.kind));
+        let session_number = FormatItem::USize(session.index);
+        let timer = FormatItem::String(self.format_timer(session.remaining_time()));
+        let args = HashMap::from([
+            ("session_kind", session_kind),
+            ("session_number", session_number),
+            ("timer", timer),
+        ]);
         if paused {
-            format!("{session_kind}\n\rSession {session_number}\n\r{timer}\n\r(Paused)\n\r")
+            dynfmt::SimpleCurlyFormat
+                .format(&self.paused_display, args)
+                .unwrap()
+                .into_owned()
         } else {
-            format!("{session_kind}\n\rSession {session_number}\n\r{timer}\n\r")
+            dynfmt::SimpleCurlyFormat
+                .format(&self.active_display, args)
+                .unwrap()
+                .into_owned()
         }
     }
 
@@ -258,6 +276,25 @@ impl<T: Into<String>, U: Into<String>, V: Into<String>> From<(T, U, V)>
             icon: icon.into(),
             title: title.into(),
             body: body.into(),
+        }
+    }
+}
+
+enum FormatItem<'a> {
+    USize(usize),
+    String(String),
+    Str(&'a str),
+}
+
+impl<'a> Serialize for FormatItem<'a> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            FormatItem::USize(x) => x.serialize(serializer),
+            FormatItem::String(x) => x.serialize(serializer),
+            FormatItem::Str(x) => x.serialize(serializer),
         }
     }
 }

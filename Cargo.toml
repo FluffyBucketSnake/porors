@@ -9,6 +9,7 @@ edition = "2021"
 backtrace = "0.3.66"
 humantime = "2.1.0"
 notify-rust = "4.5.10"
+serde = "1.0.145"
 
 [dependencies.clap]
 version = "4.0.13"
@@ -17,6 +18,10 @@ features = ["cargo", "derive"]
 [dependencies.crossterm]
 version = "0.25.0"
 features = ["event-stream"]
+
+[dependencies.dynfmt]
+version = "0.1.5"
+features = ["curly"]
 
 [dependencies.async-std]
 version = "1.12.0"
