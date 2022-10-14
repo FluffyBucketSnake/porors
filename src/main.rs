@@ -158,9 +158,15 @@ impl PomodoroConfig {
                     .into(),
             },
             formatter: PomodoroDisplayFormatter {
-                active_display: "{session_kind}\n\rSession {session_number}\n\r{timer}\n\r".into(),
-                paused_display:
-                    "{session_kind}\n\rSession {session_number}\n\r{timer}\n\r(Paused)\n\r".into(),
+                active_display: args
+                    .active_display
+                    .unwrap_or("{session_kind}\nSession {session_number}\n{timer}\n".into()),
+                paused_display: args
+                    .paused_display
+                    .unwrap_or(
+                        "{session_kind}\nSession {session_number}\n{timer}\n(Paused)\n".into(),
+                    )
+                    .into(),
                 work_session_label: args.work_label.unwrap_or("Work".into()),
                 break_session_label: args.break_label.unwrap_or("Break".into()),
                 long_break_session_label: args.long_break_label.unwrap_or("Long break".into()),
@@ -339,6 +345,12 @@ struct PomodoroArgs {
 
     #[arg(long, value_name = "TEXT")]
     long_break_notification_body: Option<String>,
+
+    #[arg(long, value_name = "TEXT")]
+    active_display: Option<String>,
+
+    #[arg(long, value_name = "TEXT")]
+    paused_display: Option<String>,
 
     #[arg(long, value_name = "TEXT")]
     work_label: Option<String>,
