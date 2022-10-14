@@ -317,6 +317,7 @@ impl<'a> Serialize for FormatItem<'a> {
 }
 
 #[derive(Parser)]
+#[command(version, author, about)]
 struct PomodoroArgs {
     #[arg(short = 't', long, value_parser = humantime::parse_duration, value_name = "DURATION")]
     tick_interval: Option<Duration>,
