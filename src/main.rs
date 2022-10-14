@@ -220,6 +220,7 @@ impl PomodoroDisplayFormatter {
                 .unwrap()
                 .into_owned()
         }
+        .replace('\n', "\n\r")
     }
 
     fn session_label_for(&self, session_kind: SessionKind) -> &str {
