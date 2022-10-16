@@ -50,12 +50,47 @@ If you are on Linux, you'll probably need **D-Bus** and a **notification server*
 
 ## Building
 
-Just use `cargo run`
+Just use `cargo build`
 
 ## Running
 
-As of now, there are no command line options. So:
+To run the binary, all you need is:
 
 ```bash
-pomodoro-rs
+porors
 ```
+
+It will start a Pomodoro timer tracker with the default settings.
+
+However, if you need a more specialized timer, you can view the options with `-h` or `--help`. Here are the built-in options:
+
+### Timer options
+
+These options change the behavior of the timer itself.
+
+- `-t, --tick-interval <DURATION>`: changes the time between each timer tick. Setting it into `3s`, for instance, means the clock will update each 3 seconds;
+- `-w, --work-duration <DURATION>`: changes the duration of all work sessions;
+- `-b, --break-duration <DURATION>`: changes the duration of all break sessions;
+- `-l, --long-break-duration <DURATION>`: changes the duration of all long break sessions.
+
+### Notification options
+
+These options change the behavior of the session end notifications.
+
+- `--work-notification-icon <ICON>`/`--break-notification-icon <ICON>`/`--long-break-notification-icon <ICON>`: changes notification icon;
+- `--work-notification-title <TEXT>`/`--break-notification-title <TEXT>`/`--long-break-notification-title <TEXT>`: changes notification title;
+- `--break-notification-body <TEXT>`/`--work-notification-body <TEXT>`/`--long-break-notification-body <TEXT>`: changes notification body text;
+
+### Display options
+
+These options change the behavior of the CLI display.
+
+- `--active-display <TEXT>`: changes the format string used by the display while the timer is active(ie. not paused);
+- `--paused-display <TEXT>`: changes the format string used by the display while the timer is paused;
+- `--work-label <TEXT>`/`--break-label <TEXT>`/`--long-break-label <TEXT>`: changes the label used for each respective type of session.
+
+Each format string accepts three format tokens:
+
+- `{timer}`: the timer display itself, show the remaining time for the current session;
+- `{session_kind}`: display the label for the current session kind;
+- `{session_number}`: display the number for the current session.
