@@ -91,6 +91,6 @@ These options change the behavior of the CLI display.
 
 Each format string accepts three format tokens:
 
-- `{timer}`: the timer display itself, show the remaining time for the current session;
-- `{session_kind}`: display the label for the current session kind;
-- `{session_number}`: display the number for the current session.
+- `{timer}`: the timer display itself, shows the remaining time for the current session;
+- `{session_kind}`: label for the current session kind;
+- `{session_number}`: number of the current session.
