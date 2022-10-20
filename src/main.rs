@@ -6,7 +6,7 @@ use async_std::{
 use backtrace::Backtrace;
 use clap::Parser;
 use crossterm::{
-    cursor::RestorePosition,
+    cursor::{RestorePosition, SavePosition},
     event::{Event, EventStream, KeyCode, KeyEvent, KeyModifiers},
     execute,
     style::Print,
@@ -60,6 +60,7 @@ impl PomodoroApplication {
 
     fn init(&mut self) -> anyhow::Result<()> {
         terminal::enable_raw_mode()?;
+        execute!(stdout(), SavePosition)?;
         panic::set_hook(Box::new(|info| {
             execute!(stdout(), RestorePosition, Clear(ClearType::FromCursorDown)).unwrap();
             terminal::disable_raw_mode().unwrap();
